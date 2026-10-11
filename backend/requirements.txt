@@ -1,0 +1,86 @@
+# =============================================================================
+# Backend dependencies — pinned to known-good ranges
+# =============================================================================
+
+# --- Web framework ---
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+python-multipart==0.0.12
+sse-starlette==2.1.3
+slowapi==0.1.9
+
+# --- Settings / validation ---
+pydantic==2.9.2
+pydantic-settings==2.5.2
+email-validator==2.2.0
+
+# --- Database ---
+sqlalchemy[asyncio]==2.0.35
+asyncpg==0.29.0
+psycopg2-binary==2.9.9
+alembic==1.13.3
+
+# --- Cache / queue ---
+redis==5.0.8
+celery[redis]==5.4.0
+flower==2.0.1
+
+# --- Observability (OpenTelemetry) ---
+opentelemetry-api==1.27.0
+opentelemetry-sdk==1.27.0
+opentelemetry-exporter-otlp-proto-http==1.27.0
+opentelemetry-instrumentation-fastapi==0.48b0
+opentelemetry-instrumentation-sqlalchemy==0.48b0
+opentelemetry-instrumentation-redis==0.48b0
+opentelemetry-instrumentation-httpx==0.48b0
+
+# --- Auth ---
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
+
+# --- AI / ML core ---
+google-generativeai==0.8.3
+sentence-transformers==3.1.1
+transformers==4.45.2
+torch==2.4.1
+numpy==1.26.4
+scikit-learn==1.5.2
+
+# --- Vector stores ---
+faiss-cpu==1.8.0.post1
+chromadb==0.5.15
+
+# --- RAG frameworks ---
+langchain==0.3.3
+langchain-community==0.3.2
+langchain-text-splitters==0.3.0
+llama-index-core==0.11.16
+rank-bm25==0.2.2
+
+# --- Speech-to-text ---
+faster-whisper==1.0.3
+ffmpeg-python==0.2.0
+
+# --- Storage ---
+boto3==1.35.36
+
+# --- Observability ---
+prometheus-client==0.21.0
+prometheus-fastapi-instrumentator==7.0.0
+structlog==24.4.0
+mlflow==2.17.0
+
+# --- Utilities ---
+httpx==0.27.2
+tenacity==9.0.0
+python-dotenv==1.0.1
+orjson==3.10.7
+aiofiles==24.1.0
+
+# --- Dev / test ---
+pytest==8.3.3
+pytest-asyncio==0.24.0
+pytest-cov==5.0.0
+ruff==0.6.9
+mypy==1.11.2

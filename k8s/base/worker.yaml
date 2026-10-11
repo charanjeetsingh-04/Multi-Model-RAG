@@ -1,0 +1,133 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-worker
+  namespace: video-rag
+  labels: { app: celery-worker }
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: celery-worker } }
+  template:
+    metadata:
+      labels: { app: celery-worker }
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      terminationGracePeriodSeconds: 60     # let in-flight tasks finish
+      containers:
+        - name: worker
+          image: REGISTRY/video-rag-backend:latest
+          imagePullPolicy: IfNotPresent
+          command: ["celery"]
+          args:
+            - "-A"
+            - "app.workers.celery_app"
+            - "worker"
+            - "-Q"
+            - "ingest,maintenance,default"
+            - "--concurrency=2"
+            - "--max-tasks-per-child=50"      # avoid memory creep (Whisper)
+            - "--loglevel=INFO"
+          envFrom:
+            - configMapRef: { name: video-rag-config }
+            - secretRef:    { name: video-rag-secrets }
+          env:
+            - { name: UPLOAD_DIR,        value: /data/uploads }
+            - { name: VECTOR_STORE_DIR,  value: /data/vector_store }
+          resources:
+            requests: { cpu: "1",    memory: "2Gi" }
+            limits:   { cpu: "4",    memory: "6Gi" }
+          volumeMounts:
+            - { name: uploads, mountPath: /data/uploads }
+            - { name: vectors, mountPath: /data/vector_store }
+            - { name: hfcache, mountPath: /cache/hf }
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - "celery -A app.workers.celery_app inspect ping -d celery@$HOSTNAME -t 10"
+            initialDelaySeconds: 60
+            periodSeconds: 60
+            timeoutSeconds: 15
+      volumes:
+        - { name: uploads, persistentVolumeClaim: { claimName: uploads-pvc } }
+        - { name: vectors, persistentVolumeClaim: { claimName: vectors-pvc } }
+        - { name: hfcache, emptyDir: { sizeLimit: 5Gi } }
+---
+# Celery Beat scheduler — single replica
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-beat
+  namespace: video-rag
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: celery-beat } }
+  template:
+    metadata:
+      labels: { app: celery-beat }
+    spec:
+      containers:
+        - name: beat
+          image: REGISTRY/video-rag-backend:latest
+          command: ["celery", "-A", "app.workers.celery_app", "beat", "--loglevel=INFO"]
+          envFrom:
+            - configMapRef: { name: video-rag-config }
+            - secretRef:    { name: video-rag-secrets }
+          resources:
+            requests: { cpu: "50m",  memory: "128Mi" }
+            limits:   { cpu: "200m", memory: "256Mi" }
+---
+# Flower UI (read-only Celery dashboard)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flower
+  namespace: video-rag
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: flower } }
+  template:
+    metadata: { labels: { app: flower } }
+    spec:
+      containers:
+        - name: flower
+          image: REGISTRY/video-rag-backend:latest
+          command: ["celery", "-A", "app.workers.celery_app", "flower", "--port=5555"]
+          ports: [{ containerPort: 5555 }]
+          envFrom:
+            - secretRef: { name: video-rag-secrets }
+          resources:
+            requests: { cpu: "50m",  memory: "128Mi" }
+            limits:   { cpu: "200m", memory: "256Mi" }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: flower, namespace: video-rag }
+spec:
+  type: ClusterIP
+  selector: { app: flower }
+  ports: [{ port: 5555, targetPort: 5555 }]
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: celery-worker-hpa
+  namespace: video-rag
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: celery-worker
+  minReplicas: 2
+  maxReplicas: 30
+  # Production: replace with KEDA scaler on Redis queue length.
+  metrics:
+    - type: Resource
+      resource: { name: cpu,    target: { type: Utilization, averageUtilization: 75 } }
+    - type: Resource
+      resource: { name: memory, target: { type: Utilization, averageUtilization: 80 } }

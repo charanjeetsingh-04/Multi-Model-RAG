@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: video-rag-config
+  namespace: video-rag
+data:
+  APP_NAME: "video-rag-assistant"
+  APP_ENV: "production"
+  APP_DEBUG: "false"
+  LOG_LEVEL: "INFO"
+  LOG_FORMAT: "json"
+  CORS_ORIGINS: "https://app.example.com"
+  REDIS_ENABLED: "true"
+  STORAGE_BACKEND: "s3"
+  VECTOR_STORE_BACKEND: "faiss"
+  EMBEDDING_MODEL: "sentence-transformers/all-MiniLM-L6-v2"
+  EMBEDDING_DEVICE: "cpu"
+  EMBEDDING_BATCH_SIZE: "32"
+  EMBEDDING_DIM: "384"
+  WHISPER_MODEL_SIZE: "base"
+  WHISPER_DEVICE: "cpu"
+  WHISPER_COMPUTE_TYPE: "int8"
+  CHUNK_SIZE: "800"
+  CHUNK_OVERLAP: "120"
+  RETRIEVAL_TOP_K: "8"
+  RERANK_TOP_K: "4"
+  USE_HYBRID_SEARCH: "true"
+  USE_RERANKER: "true"
+  SHORT_TERM_MEMORY_TURNS: "10"
+  LONG_TERM_SUMMARY_THRESHOLD: "20"
+  RATE_LIMIT_PER_MINUTE: "60"
+  GEMINI_MODEL: "gemini-2.5-flash"
+  GEMINI_TEMPERATURE: "0.3"
+  GEMINI_MAX_OUTPUT_TOKENS: "2048"
+  OTEL_SERVICE_NAME: "video-rag-backend"

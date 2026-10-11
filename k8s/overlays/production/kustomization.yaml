@@ -1,0 +1,13 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+bases:
+  - ../../base
+
+namespace: video-rag
+
+# Production scales bigger; HPAs still control elastically beyond min.
+replicas:
+  - { name: backend,        count: 5 }
+  - { name: celery-worker,  count: 4 }
+  - { name: frontend,       count: 3 }

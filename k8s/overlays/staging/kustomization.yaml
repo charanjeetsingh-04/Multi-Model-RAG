@@ -1,0 +1,22 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+bases:
+  - ../../base
+
+namespace: video-rag-staging
+
+replicas:
+  - { name: backend,        count: 2 }
+  - { name: celery-worker,  count: 1 }
+  - { name: frontend,       count: 1 }
+
+patches:
+  - target: { kind: ConfigMap, name: video-rag-config }
+    patch: |-
+      - op: replace
+        path: /data/APP_ENV
+        value: staging
+      - op: replace
+        path: /data/CORS_ORIGINS
+        value: https://staging.example.com

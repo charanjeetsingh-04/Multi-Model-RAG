@@ -1,0 +1,130 @@
+# =============================================================================
+# Multi-Modal Video RAG AI Assistant — Docker Compose
+# =============================================================================
+services:
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-videorag}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-videorag_dev_pw}
+      POSTGRES_DB: ${POSTGRES_DB:-videorag}
+    ports: ["5432:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-videorag}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mlflow:
+    build:
+      context: .
+      dockerfile: docker/mlflow.Dockerfile
+    restart: unless-stopped
+    ports: ["5000:5000"]
+    volumes:
+      - mlflowdata:/mlflow
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-videorag}:${POSTGRES_PASSWORD:-videorag_dev_pw}@postgres:5432/${POSTGRES_DB:-videorag}
+      DATABASE_URL_SYNC: postgresql+psycopg2://${POSTGRES_USER:-videorag}:${POSTGRES_PASSWORD:-videorag_dev_pw}@postgres:5432/${POSTGRES_DB:-videorag}
+      REDIS_URL: redis://redis:6379/0
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      UPLOAD_DIR: /data/uploads
+      VECTOR_STORE_DIR: /data/vector_store
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+    volumes:
+      - uploads:/data/uploads
+      - vectors:/data/vector_store
+      - hfcache:/cache/hf
+    ports: ["8000:8000"]
+    command: >
+      sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2"
+
+  worker:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-videorag}:${POSTGRES_PASSWORD:-videorag_dev_pw}@postgres:5432/${POSTGRES_DB:-videorag}
+      DATABASE_URL_SYNC: postgresql+psycopg2://${POSTGRES_USER:-videorag}:${POSTGRES_PASSWORD:-videorag_dev_pw}@postgres:5432/${POSTGRES_DB:-videorag}
+      REDIS_URL: redis://redis:6379/0
+      UPLOAD_DIR: /data/uploads
+      VECTOR_STORE_DIR: /data/vector_store
+    depends_on:
+      backend: { condition: service_started }
+    volumes:
+      - uploads:/data/uploads
+      - vectors:/data/vector_store
+      - hfcache:/cache/hf
+    command: >
+      celery -A app.workers.celery_app worker
+      -Q ingest,maintenance,default
+      --concurrency=2 --max-tasks-per-child=50 --loglevel=INFO
+
+  beat:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-videorag}:${POSTGRES_PASSWORD:-videorag_dev_pw}@postgres:5432/${POSTGRES_DB:-videorag}
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      worker: { condition: service_started }
+    command: celery -A app.workers.celery_app beat --loglevel=INFO
+
+  flower:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      worker: { condition: service_started }
+    ports: ["5555:5555"]
+    command: celery -A app.workers.celery_app flower --port=5555
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+    depends_on:
+      - backend
+    ports: ["3000:3000"]
+
+volumes:
+  pgdata:
+  uploads:
+  vectors:
+  hfcache:
+  mlflowdata:

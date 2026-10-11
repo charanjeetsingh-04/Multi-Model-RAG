@@ -1,0 +1,24 @@
+# Run Alembic migrations on deploy. Wrap this in a Helm hook / Argo sync
+# wave so it runs before the backend rollout.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: alembic-migrate
+  namespace: video-rag
+  annotations:
+    "argocd.argoproj.io/sync-wave": "-1"
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: alembic
+          image: REGISTRY/video-rag-backend:latest
+          command: ["alembic", "upgrade", "head"]
+          envFrom:
+            - configMapRef: { name: video-rag-config }
+            - secretRef:    { name: video-rag-secrets }
+          resources:
+            requests: { cpu: "100m", memory: "256Mi" }
+            limits:   { cpu: "500m", memory: "512Mi" }

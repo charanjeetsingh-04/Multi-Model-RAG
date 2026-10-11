@@ -1,0 +1,45 @@
+# Ingress + NetworkPolicy. Replace annotations to match your controller
+# (NGINX, AWS LB, GKE, Traefik, etc.).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: video-rag-ingress
+  namespace: video-rag
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/proxy-body-size: "550m"      # 500MB upload + headroom
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"    # long Whisper jobs
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"        # SSE streaming
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  tls:
+    - hosts: ["app.example.com", "api.example.com"]
+      secretName: video-rag-tls
+  rules:
+    - host: app.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: frontend, port: { number: 80 } } }
+    - host: api.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: backend, port: { number: 80 } } }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backend-allow-ingress
+  namespace: video-rag
+spec:
+  podSelector: { matchLabels: { app: backend } }
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - namespaceSelector: { matchLabels: { name: ingress-nginx } }
+      ports:
+        - { port: 8000, protocol: TCP }
